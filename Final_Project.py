@@ -65,7 +65,7 @@ def calc_edge(addr_1, addr_2, factor=None):
 	"""Calculate the edge weight based on certain factors"""
 	location_list=[addr_1, addr_2]
 
-	if factor is None or factor is 'dist':
+	if factor is None:
 		# MapQuest distance from addr_1 to addr_2
 		routeMatrix = service.routeMatrix(locations=location_list, allToAll=True)
 		return routeMatrix['distance'][0][1]
@@ -81,7 +81,7 @@ def calc_edge(addr_1, addr_2, factor=None):
 		# MapQuest time divided by distance
 
 	#elif factor is 'fuel':
-		# Mapquest distance from l1 to l2 
+		# Mapquest distance from addr_1 to addr_2 
 		# Taking weight into account for fuel efficiency
 		# Use the weight_point_for_load() method
 	

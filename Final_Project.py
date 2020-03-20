@@ -17,13 +17,17 @@ from RouteService import RouteService
 from openpyxl import Workbook
 from openpyxl import load_workbook
 
-%matplotlib inline
+#%matplotlib inline
 
-wb = load_workbook('FILE_NAME', read_only=False, keep_vba=True)
+data_file = "./data/1_02.xlsm" #Enter the data file for the day to schedule
+
+wb = load_workbook(data_file, read_only=False, keep_vba=True)
 ws = wb.active
 deliveries = {}
 load_weights = []
-service = RouteService('YOUR_MAPQUEST_DEVELOPER_API_KEY')
+
+options = RouteOptions()
+service = RouteService('dAGkCaPVqA3OcC5ws2Lfv8wsR9ro45oe')
 
 for row in range(1, len(ws['A'])+1):
 	if ('delivery' in str(ws['J'+str(row)].value)):
@@ -33,10 +37,13 @@ for row in range(1, len(ws['A'])+1):
 			deliveries[ws['A'+str(row)].value] = [ws['R'+str(row)].value]
 		load_weights.append(ws['AK'+str(row)].value)
 
+"""Separates out the location list of a single truck"""
+one_truck_locations = deliveries[1646] #Enter number for truck to get locations for
+
 
 def get_weighted_dist_matrix(locations, loads, factor_weight):
 
-    route_matrix = service.routeMatrix(locations=locations, allToAll=true)
+    route_matrix = service.routeMatrix(locations=locations, allToAll=True)
     dist_matrix = route_matrix['distance']
     weighted_dist_matrix = dist_matrix
 
@@ -49,7 +56,7 @@ def get_weighted_dist_matrix(locations, loads, factor_weight):
 
 def get_weighted_time_matrix(locations, loads, factor_weight):
 
-    route_matrix = service.routeMatrix(locations=locations, allToAll=true)
+    route_matrix = service.routeMatrix(locations=locations, allToAll=True)
 
     time_matrix = route_matrix['time']
     weighted_time_matrix = time_matrix
@@ -84,15 +91,6 @@ def calc_edge(addr_1, addr_2, factor=None):
 		# Mapquest distance from addr_1 to addr_2 
 		# Taking weight into account for fuel efficiency
 		# Use the weight_point_for_load() method
-	
-def weight_point_for_load(point):
-  """Takes a delivery destination. Incorporates
-  a load size based on a specified weighing factor. (changes the
-  effective distance from this point to all others)"""
-
-	load_factor_weight = 0.5 #experiment with different weights of this factor
-
-	return weighted_loc
   
 def create_individual_driver_graphs(nodes):
 	G = nx.DiGraph()
@@ -107,3 +105,13 @@ def create_individual_driver_graphs(nodes):
 			G.add_edges_from(drive_times)
 	
 	# nx.shortest_path() investigation
+
+#This section is TESTING for the weighted matrix outputs
+print "Original Dist Matrix:"
+route_matrix = service.routeMatrix(locations=one_truck_locations, allToAll=True)
+dist_matrix = route_matrix['distance']
+print dist_matrix
+
+print "Weighted Dist Matrix:"
+weighted_dist_matrix = get_weighted_dist_matrix(one_truck_locations, load_weights, 0.5)
+print weighted_dist_matrix

@@ -23,6 +23,7 @@ wb = load_workbook('FILE_NAME', read_only=False, keep_vba=True)
 ws = wb.active
 deliveries = {}
 load_weights = []
+service = RouteService('YOUR_MAPQUEST_DEVELOPER_API_KEY')
 
 for row in range(1, len(ws['A'])+1):
 	if ('delivery' in str(ws['J'+str(row)].value)):
@@ -62,8 +63,6 @@ def get_weighted_time_matrix(locations, loads, factor_weight):
 
 def calc_edge(addr_1, addr_2, factor=None):
 	"""Calculate the edge weight based on certain factors"""
-
-	service = RouteService('YOUR_MAPQUEST_DEVELOPER_API_KEY')
 	location_list=[addr_1, addr_2]
 
 	if factor is None or factor is 'dist':

@@ -71,8 +71,11 @@ def calc_edge(addr_1, addr_2, factor=None):
 		routeMatrix = service.routeMatrix(locations=location_list, allToAll=True)
 		return routeMatrix['distance'][0][1]
 
+	elif factor is 'dist':
+		return 0 # Placeholder 
+
 	elif factor is 'time':
-		return 0
+		return 0 # Placeholder
 		# Return MapQuest time
 
 	#elif factor is 'dist/time':

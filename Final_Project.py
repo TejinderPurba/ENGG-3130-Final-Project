@@ -22,7 +22,7 @@ from openpyxl import load_workbook
 data_file = "./data/1_02.xlsm" #Enter the data file for the day to schedule
 driver = '1642'
 sleeman_location = "551 Clair Rd W, Guelph, ON N1L 1E9"
-	
+    
 wb = load_workbook(data_file, read_only=False, keep_vba=True)
 ws = wb.active
 deliveries = {}
@@ -32,13 +32,13 @@ options = RouteOptions()
 service = RouteService('dAGkCaPVqA3OcC5ws2Lfv8wsR9ro45oe')
 
 for row in range(1, len(ws['A'])+1):
-	if ('delivery' in str(ws['J'+str(row)].value)):
-		if str(ws['A'+str(row)].value) in deliveries.keys():
-			deliveries[str(ws['A'+str(row)].value)].append(str(ws['R'+str(row)].value))
-			load_weights[float(ws['A'+str(row)].value)].append(float(ws['AK'+str(row)].value))
-		else:
-			deliveries[str(ws['A'+str(row)].value)] = [str(ws['R'+str(row)].value)]
-			load_weights[float(ws['A'+str(row)].value)] = [float(ws['AK'+str(row)].value)]
+    if ('delivery' in str(ws['J'+str(row)].value)):
+        if str(ws['A'+str(row)].value) in deliveries.keys():
+            deliveries[str(ws['A'+str(row)].value)].append(str(ws['R'+str(row)].value))
+            load_weights[float(ws['A'+str(row)].value)].append(float(ws['AK'+str(row)].value))
+        else:
+            deliveries[str(ws['A'+str(row)].value)] = [str(ws['R'+str(row)].value)]
+            load_weights[float(ws['A'+str(row)].value)] = [float(ws['AK'+str(row)].value)]
 
 def get_weighted_dist_matrix(locations, loads, factor_weight):
 
@@ -68,48 +68,48 @@ def get_weighted_time_matrix(locations, loads, factor_weight):
 
 
 def calc_edges(locations, loads=None, factor=None, factor_weight=None):
-	"""Calculate the edge weight"""
+    """Calculate the edge weight"""
 
-	if factor is None:
-  		routeMatrix = service.routeMatrix(locations=locations, oneToMany=True)
+    if factor is None:
+        routeMatrix = service.routeMatrix(locations=locations, oneToMany=True)
   
-  	elif factor is 'dist':
- 		routeMatrix = get_weighted_dist_matrix(locations=locations, loads=loads, factor_weight=factor_weight)
+    elif factor is 'dist':
+        routeMatrix = get_weighted_dist_matrix(locations=locations, loads=loads, factor_weight=factor_weight)
     
-  	elif factor is 'time':
-		routeMatrix = get_weighted_time_matrix(locations=locations, loads=loads, factor_weight=factor_weight)
+    elif factor is 'time':
+        routeMatrix = get_weighted_time_matrix(locations=locations, loads=loads, factor_weight=factor_weight)
     
-  	return routeMatrix
+    return routeMatrix
   
 def create_one_driver_graph():
-  	G = nx.DiGraph()
-	drive_times = {}
-  	nodes = deliveries[driver]
-  	nodes.append(sleeman_location) # Add the origin destination
+    G = nx.DiGraph()
+    drive_times = {}
+    nodes = deliveries[driver]
+    nodes.append(sleeman_location) # Add the origin destination
   
-  	for n in range(0, len(nodes)): # Might need to be len(nodes) + 1 instead, test and find out
-		cycled_nodes = (nodes[-n:] + nodes[:-n]) 
-    	routeMatrix = calc_edges(cycled_nodes)
-    	for i in range(1, len(cycled_nodes)+1):
-    		drive_times.add((cycled_nodes[0], cycled_nodes[i]), float(routeMatrix[i]))
+    for n in range(0, len(nodes)): # Might need to be len(nodes) + 1 instead, test and find out
+        cycled_nodes = (nodes[-n:] + nodes[:-n]) 
+        routeMatrix = calc_edges(cycled_nodes)
+        for i in range(1, len(cycled_nodes)+1):
+            drive_times.add((cycled_nodes[0], cycled_nodes[i]), float(routeMatrix[i]))
   
-  	G.add_nodes_from(nodes)
-  	G.add_edges_from(drive_times)
+    G.add_nodes_from(nodes)
+    G.add_edges_from(drive_times)
   
 # NOT USED AS OF NOW, ONLY FOR REFERENCE PURPOSES
 def create_all_driver_graphs():
-	G = nx.DiGraph()
-	drive_times = {}
-	for driver in deliveries.keys():
-		drive_times.clear()
-		nodes = deliveries[driver]
-		G.add_nodes_from(nodes)
-		all_combs = combinations(nodes, 2) 
-		for i in len(list(all_combs)):
-			drive_times.add(list(all_combs)[i], calc_edges(list(all_combs)[i][0],list(all_combs)[i][1], 'dist'))
-			G.add_edges_from(drive_times)
-	
-	# nx.shortest_path() investigation
+    G = nx.DiGraph()
+    drive_times = {}
+    for driver in deliveries.keys():
+        drive_times.clear()
+        nodes = deliveries[driver]
+        G.add_nodes_from(nodes)
+        all_combs = combinations(nodes, 2) 
+        for i in len(list(all_combs)):
+            drive_times.add(list(all_combs)[i], calc_edges(list(all_combs)[i][0],list(all_combs)[i][1], 'dist'))
+            G.add_edges_from(drive_times)
+    
+    # nx.shortest_path() investigation
 
 
 ################

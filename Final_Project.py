@@ -7,7 +7,7 @@ import numpy as np
 import json
 import string
 import matplotlib.pyplot as plt
-from itertools import combinations
+from itertools import combinations 
 
 # Import MapQuest API Libraries from https://github.com/MapQuest/directions-api-python-client somehow
 from RouteOptions import RouteOptions
@@ -17,10 +17,12 @@ from RouteService import RouteService
 from openpyxl import Workbook
 from openpyxl import load_workbook
 
-# %matplotlib inline
+#%matplotlib inline
 
-data_file = "./data/1_02.xlsm"  # Enter the data file for the day to schedule
-
+data_file = "./data/1_02.xlsm" #Enter the data file for the day to schedule
+driver = '1642'
+sleeman_location = "551 Clair Rd W, Guelph, ON N1L 1E9"
+	
 wb = load_workbook(data_file, read_only=False, keep_vba=True)
 ws = wb.active
 deliveries = {}
@@ -29,86 +31,96 @@ load_weights = {}
 options = RouteOptions()
 service = RouteService('dAGkCaPVqA3OcC5ws2Lfv8wsR9ro45oe')
 
-for row in range(1, len(ws['A']) + 1):
-    if ('delivery' in str(ws['J' + str(row)].value)):
-        if str(ws['A' + str(row)].value) in deliveries.keys():
-            deliveries[str(ws['A' + str(row)].value)].append(str(ws['R' + str(row)].value))
-            load_weights[float(ws['A' + str(row)].value)].append(float(ws['AK' + str(row)].value))
-        else:
-            deliveries[str(ws['A' + str(row)].value)] = [str(ws['R' + str(row)].value)]
-            load_weights[float(ws['A' + str(row)].value)] = [float(ws['AK' + str(row)].value)]
-
-"""Separates out the location list of a single truck"""
-one_truck_locations = deliveries['1642']  # Enter number for truck to get locations for
-one_truck_load_weights = load_weights[1642]
-
+for row in range(1, len(ws['A'])+1):
+	if ('delivery' in str(ws['J'+str(row)].value)):
+		if str(ws['A'+str(row)].value) in deliveries.keys():
+			deliveries[str(ws['A'+str(row)].value)].append(str(ws['R'+str(row)].value))
+			load_weights[float(ws['A'+str(row)].value)].append(float(ws['AK'+str(row)].value))
+		else:
+			deliveries[str(ws['A'+str(row)].value)] = [str(ws['R'+str(row)].value)]
+			load_weights[float(ws['A'+str(row)].value)] = [float(ws['AK'+str(row)].value)]
 
 def get_weighted_dist_matrix(locations, loads, factor_weight):
-    route_matrix = service.routeMatrix(locations=locations, allToAll=False)
+
+    route_matrix = service.routeMatrix(locations=locations, oneToMany=True)
     dist_matrix = route_matrix['distance']
     weighted_dist_matrix = dist_matrix
 
     i = 0;
     for load_weight in loads:
-        weighted_dist_matrix[i] = dist_matrix[i] * (1 / load_weight) * factor_weight
-        i += 1
+        weighted_dist_matrix[i] = dist_matrix[i]*(1/load_weight)*factor_weight
+        i+=1
     return weighted_dist_matrix
 
 
 def get_weighted_time_matrix(locations, loads, factor_weight):
-    route_matrix = service.routeMatrix(locations=locations, allToAll=False)
+
+    route_matrix = service.routeMatrix(locations=locations, oneToMany=True)
+
     time_matrix = route_matrix['time']
     weighted_time_matrix = time_matrix
 
     i = 0;
     for load_weight in loads:
-        weighted_time_matrix[i] = time_matrix[i] * (1 / load_weight) * factor_weight
-        i += 1
+        weighted_time_matrix[i] = time_matrix[i] * (1/load_weight) * factor_weight
+        i+=1
     return weighted_time_matrix
 
 
-def calc_edges(addr_1, addr_2, factor=None):
-    """Calculate the edge weight based on certain factors"""
-    location_list = [addr_1, addr_2]
+def calc_edges(locations, loads=None, factor=None, factor_weight=None):
+	"""Calculate the edge weight"""
 
-    if factor is None:
-        # MapQuest distance from addr_1 to addr_2
-        routeMatrix = service.routeMatrix(locations=location_list, allToAll=True)
-        return (routeMatrix['distance'][0][1], routeMatrix['distance'][1][0])
+	if factor is None:
+  		routeMatrix = service.routeMatrix(locations=locations, oneToMany=True)
+  
+  	elif factor is 'dist':
+ 		routeMatrix = get_weighted_dist_matrix(locations=locations, loads=loads, factor_weight=factor_weight)
+    
+  	elif factor is 'time':
+		routeMatrix = get_weighted_time_matrix(locations=locations, loads=loads, factor_weight=factor_weight)
+    
+  	return routeMatrix
+  
+def create_one_driver_graph():
+  	G = nx.DiGraph()
+	drive_times = {}
+  	nodes = deliveries[driver]
+  	nodes.append(sleeman_location) # Add the origin destination
+  
+  	for n in range(0, len(nodes)): # Might need to be len(nodes) + 1 instead, test and find out
+		cycled_nodes = (nodes[-n:] + nodes[:-n]) 
+    	routeMatrix = calc_edges(cycled_nodes)
+    	for i in range(1, len(cycled_nodes)+1):
+    		drive_times.add((cycled_nodes[0], cycled_nodes[i]), float(routeMatrix[i]))
+  
+  	G.add_nodes_from(nodes)
+  	G.add_edges_from(drive_times)
+  
+# NOT USED AS OF NOW, ONLY FOR REFERENCE PURPOSES
+def create_all_driver_graphs():
+	G = nx.DiGraph()
+	drive_times = {}
+	for driver in deliveries.keys():
+		drive_times.clear()
+		nodes = deliveries[driver]
+		G.add_nodes_from(nodes)
+		all_combs = combinations(nodes, 2) 
+		for i in len(list(all_combs)):
+			drive_times.add(list(all_combs)[i], calc_edges(list(all_combs)[i][0],list(all_combs)[i][1], 'dist'))
+			G.add_edges_from(drive_times)
+	
+	# nx.shortest_path() investigation
 
-    elif factor is 'dist':
-        return 0  # Placeholder
 
-    elif factor is 'time':
-        return 0  # Placeholder
-
-
-# Return MapQuest time
-
-# elif factor is 'dist/time':
-# MapQuest time divided by distance
-
-# elif factor is 'fuel':
-# Mapquest distance from addr_1 to addr_2
-# Taking weight into account for fuel efficiency
-# Use the weight_point_for_load() method
-
-def create_individual_driver_graphs(nodes):
-    G = nx.DiGraph()
-    drive_times = {}
-    for driver in deliveries.keys():
-        drive_times.clear()
-        nodes = deliveries[driver]
-        G.add_nodes_from(nodes)
-        all_combs = combinations(nodes, 2)
-        for i in len(list(all_combs)):
-            drive_times.add(list(all_combs)[i], calc_edge(list(all_combs)[i][0], list(all_combs)[i][1]), 'dist')
-            G.add_edges_from(drive_times)
-
-
-# nx.shortest_path() investigation
-
+################
 # This section is TESTING for the weighted matrix outputs
+################
+
+"""Separates out the location list of a single truck"""
+#Enter number for truck to get locations for
+one_truck_locations = deliveries[driver]
+one_truck_load_weights = load_weights[float(driver)]
+
 print "Original Dist Matrix:"
 route_matrix = service.routeMatrix(locations=one_truck_locations, oneToMany=True)
 dist_matrix = route_matrix['distance']
@@ -125,4 +137,3 @@ print time_matrix
 print "Weighted Time Matrix:"
 weighted_time_matrix = get_weighted_time_matrix(one_truck_locations, one_truck_load_weights, 0.5)
 print weighted_time_matrix
-

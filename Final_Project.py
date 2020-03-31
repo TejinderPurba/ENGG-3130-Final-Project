@@ -88,7 +88,7 @@ def create_one_driver_graph():
     nodes = deliveries[driver]
     nodes.append(sleeman_location) # Add the origin destination
   
-    for n in range(0, len(nodes)): # Might need to be len(nodes) + 1 instead, test and find out
+    for n in range(1, len(nodes)+1): # Might need to be len(nodes) + 1 instead, test and find out
         cycled_nodes = (nodes[-n:] + nodes[:-n])
 
         routeMatrix = calc_edges(cycled_nodes)
@@ -101,7 +101,7 @@ def create_one_driver_graph():
     G.add_nodes_from(nodes)
     G.add_edges_from(drive_times)
 
-    return G
+    return G, drive_times
   
 # NOT USED AS OF NOW, ONLY FOR REFERENCE PURPOSES
 def create_all_driver_graphs():
@@ -118,12 +118,13 @@ def create_all_driver_graphs():
     return G
     # nx.shortest_path() investigation
 
-def display_graph(G):
+def display_graph(G, edges):
     nx.draw(G,
         node_color='b',
         node_size=2000,
         with_labels=True,
         font_size=10)
+    nx.draw_networkx_edge_labels(G, edge_labels=edges, pos=nx.spring_layout(G), font_size=8)
     plt.show()
 
 
@@ -153,6 +154,10 @@ print "Weighted Time Matrix:"
 weighted_time_matrix = get_weighted_time_matrix(one_truck_locations, one_truck_load_weights, 0.5)
 print weighted_time_matrix
 
-routeGraph = create_one_driver_graph()
+graph_and_edges = create_one_driver_graph()
 
-display_graph(routeGraph)
+routeGraph = graph_and_edges[0]
+
+edges = graph_and_edges[1]
+
+display_graph(routeGraph, edges)

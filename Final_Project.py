@@ -71,7 +71,8 @@ def calc_edges(locations, loads=None, factor=None, factor_weight=None):
     """Calculate the edge weight"""
 
     if factor is None:
-        routeMatrix = service.routeMatrix(locations=locations, oneToMany=True)
+        routeMatrixRaw = service.routeMatrix(locations=locations, oneToMany=True)
+        routeMatrix = routeMatrixRaw['distance']
   
     elif factor is 'dist':
         routeMatrix = get_weighted_dist_matrix(locations=locations, loads=loads, factor_weight=factor_weight)

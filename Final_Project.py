@@ -88,7 +88,7 @@ def create_one_driver_graph():
     nodes = deliveries[driver]
     nodes.append(sleeman_location) # Add the origin destination
   
-    for n in range(1, len(nodes)): # Might need to be len(nodes) + 1 instead, test and find out
+    for n in range(0, len(nodes)): # Might need to be len(nodes) + 1 instead, test and find out
         cycled_nodes = (nodes[-n:] + nodes[:-n])
 
         routeMatrix = calc_edges(cycled_nodes)

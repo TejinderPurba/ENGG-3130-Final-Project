@@ -92,8 +92,10 @@ def create_one_driver_graph():
 
         routeMatrix = calc_edges(cycled_nodes)
         for i in range(1, len(cycled_nodes)+1):
-            print cycled_nodes[0]+'~ AND ~'+cycled_nodes[i]
-            drive_times[(cycled_nodes[0], cycled_nodes[i])] = float(routeMatrix[i])
+            #print cycled_nodes[0]+' ~ AND ~ '+cycled_nodes[i]
+            import ipdb
+            ipdb.set_trace()
+            drive_times[(cycled_nodes[0], cycled_nodes[i])] = float(routeMatrix[i]) #KEY ERROR HERE! (not immutable?)
   
     G.add_nodes_from(nodes)
     G.add_edges_from(drive_times)

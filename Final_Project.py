@@ -1,6 +1,7 @@
 # ENGG*3130 - Modeling Complex Systems
 ## Final Project
 
+from __future__ import print_function
 import io
 import networkx as nx
 import numpy as np
@@ -17,6 +18,10 @@ from RouteService import RouteService
 from openpyxl import Workbook
 from openpyxl import load_workbook
 
+# Import Google VRP libraries
+from ortools.constraint_solver import routing_enums_pb2
+from ortools.constraint_solver import pywrapcp
+
 #%matplotlib inline
 
 data_file = "./data/1_02.xlsm" #Enter the data file for the day to schedule
@@ -29,8 +34,9 @@ deliveries = {}
 load_weights = {}
 
 options = RouteOptions()
-service = RouteService('dAGkCaPVqA3OcC5ws2Lfv8wsR9ro45oe')
+service = RouteService('UaKqbaGJv9wQGxdOe95QTTSWa1ldsj9e')
 
+# CHANGE TO NOT SPLIT UP INTO DRIVERS, ONLY KEEPING THIS NOW FOR EASE OF DEBUGGING
 for row in range(1, len(ws['A'])+1):
     if ('delivery' in str(ws['J'+str(row)].value)):
         if str(ws['A'+str(row)].value) in deliveries.keys():
@@ -84,11 +90,12 @@ def calc_edges(locations, loads=None, factor=None, factor_weight=None):
   
 def create_one_driver_graph():
     G = nx.DiGraph()
+    drive_times_all = {}
     drive_times = {}
     nodes = deliveries[driver]
     nodes.append(sleeman_location) # Add the origin destination
   
-    for n in range(0, len(nodes)): # Might need to be len(nodes) + 1 instead, test and find out
+    for n in range(0, len(nodes)): 
         cycled_nodes = (nodes[-n:] + nodes[:-n])
         routeMatrix = calc_edges(cycled_nodes)
 
@@ -96,28 +103,22 @@ def create_one_driver_graph():
             #print cycled_nodes[0]+' ~ AND ~ '+cycled_nodes[i]
             #import ipdb
             #ipdb.set_trace()
-            print str(cycled_nodes[0]) +" --------- "+ str(cycled_nodes[i]) +" --------- "+ str(routeMatrix[i])
-            drive_times[(cycled_nodes[0], cycled_nodes[i])] = float(routeMatrix[i])
+            #print str(cycled_nodes[0]) +" --------- "+ str(cycled_nodes[i]) +" --------- "+ str(routeMatrix[i])
+            drive_times_all[(cycled_nodes[0], cycled_nodes[i])] = float(routeMatrix[i])
+
+    all_combinations = list(combinations(nodes, 2))
+    for n in range(len(all_combinations)):
+        val1 = drive_times_all[all_combinations[n]]
+        reversed_combination = all_combinations[n][::-1]
+        val2 = drive_times_all[reversed_combination]
+        avg = (val1+val2)/2.0
+        drive_times[all_combinations[n]] = round(avg, 1)
+        drive_times[reversed_combination] = round(avg, 1)
 
     G.add_nodes_from(nodes)
     G.add_edges_from(drive_times)
 
     return G, drive_times
-  
-# NOT USED AS OF NOW, ONLY FOR REFERENCE PURPOSES
-def create_all_driver_graphs():
-    G = nx.DiGraph()
-    drive_times = {}
-    for driver in deliveries.keys():
-        drive_times.clear()
-        nodes = deliveries[driver]
-        G.add_nodes_from(nodes)
-        all_combs = combinations(nodes, 2) 
-        for i in len(list(all_combs)):
-            drive_times.add(list(all_combs)[i], calc_edges(list(all_combs)[i][0],list(all_combs)[i][1], 'dist'))
-            G.add_edges_from(drive_times)
-    return G
-    # nx.shortest_path() investigation
 
 def display_graph(G, edges):
     nx.draw(G,
@@ -128,37 +129,114 @@ def display_graph(G, edges):
     nx.draw_networkx_edge_labels(G, edge_labels=edges, pos=nx.spring_layout(G), font_size=8)
     plt.show()
 
+def create_data_model():
+    """Stores the data for the problem."""
+    data = {}
+    distance_matrix = []
+    distance_matrix_list = []
+    nodes = deliveries[driver]
+    nodes.insert(0, sleeman_location) # Add the origin destination
 
-################
-# This section is TESTING for the weighted matrix outputs
-################
+    graphs_and_edges = create_one_driver_graph()
+    drive_times = graphs_and_edges[1]
 
-"""Separates out the location list of a single truck"""
-#Enter number for truck to get locations for
-one_truck_locations = deliveries[driver]
-one_truck_load_weights = load_weights[float(driver)]
+    for n in range(len(nodes)-1):
+        del distance_matrix_list[:]
+        for i in range(len(nodes)-1):
+            search_tuple = (nodes[n], nodes[i])
+            if search_tuple in drive_times:
+                distance_matrix_list.append(int(drive_times[search_tuple]))
+            else:
+                distance_matrix_list.append(int(0))
+        #print distance_matrix_list # Debugging line
+        distance_matrix.append(list(distance_matrix_list))
 
-print "Original Dist Matrix:"
-route_matrix = service.routeMatrix(locations=one_truck_locations, oneToMany=True)
-dist_matrix = route_matrix['distance']
-print dist_matrix
+    data['distance_matrix'] = distance_matrix
+    data['num_vehicles'] = 1 # Not static, should be parsed from command line
+    data['depot'] = 0 # Should be static?
 
-print "Weighted Dist Matrix:"
-weighted_dist_matrix = get_weighted_dist_matrix(one_truck_locations, one_truck_load_weights, 0.5)
-print weighted_dist_matrix
+    return data
 
-print "Original Time Matrix:"
-time_matrix = route_matrix['time']
-print time_matrix
+"""https://developers.google.com/optimization/routing/vrp"""
+def print_solution(data, manager, routing, solution):
+    """Prints solution on console."""
+    max_route_distance = 0
+    for vehicle_id in range(data['num_vehicles']):
+        index = routing.Start(vehicle_id)
+        plan_output = 'Route for vehicle {}:\n'.format(vehicle_id)
+        route_distance = 0
+        while not routing.IsEnd(index):
+            plan_output += ' {} -> '.format(manager.IndexToNode(index))
+            previous_index = index
+            index = solution.Value(routing.NextVar(index))
+            route_distance += routing.GetArcCostForVehicle(
+                previous_index, index, vehicle_id)
+        plan_output += '{}\n'.format(manager.IndexToNode(index))
+        plan_output += 'Distance of the route: {}m\n'.format(route_distance)
+        print(plan_output)
+        max_route_distance = max(route_distance, max_route_distance)
+    print('Maximum of the route distances: {}m'.format(max_route_distance))
 
-print "Weighted Time Matrix:"
-weighted_time_matrix = get_weighted_time_matrix(one_truck_locations, one_truck_load_weights, 0.5)
-print weighted_time_matrix
+"""https://developers.google.com/optimization/routing/vrp"""
+def main():
+    """Separates out the location list of a single truck"""
+    #Enter number for truck to get locations for
+    one_truck_locations = deliveries[driver]
+    one_truck_load_weights = load_weights[float(driver)]
 
-graph_and_edges = create_one_driver_graph()
+    graph_and_edges = create_one_driver_graph()
+    routeGraph = graph_and_edges[0]
+    edges = graph_and_edges[1]
+    display_graph(routeGraph, edges)                                                   
 
-routeGraph = graph_and_edges[0]
+    """Solve the CVRP problem."""
+    # Instantiate the data problem.
+    data = create_data_model()
+    #print data
 
-edges = graph_and_edges[1]
+    # Create the routing index manager.
+    manager = pywrapcp.RoutingIndexManager(len(data['distance_matrix']),
+                                           data['num_vehicles'], data['depot'])
 
-display_graph(routeGraph, edges)
+    # Create Routing Model.
+    routing = pywrapcp.RoutingModel(manager)
+
+
+    # Create and register a transit callback.
+    def distance_callback(from_index, to_index):
+        """Returns the distance between the two nodes."""
+        # Convert from routing variable Index to distance matrix NodeIndex.
+        from_node = manager.IndexToNode(from_index)
+        to_node = manager.IndexToNode(to_index)
+        return data['distance_matrix'][from_node][to_node]
+
+    transit_callback_index = routing.RegisterTransitCallback(distance_callback)
+
+    # Define cost of each arc.
+    routing.SetArcCostEvaluatorOfAllVehicles(transit_callback_index)
+
+    # Add Distance constraint.
+    dimension_name = 'Distance'
+    routing.AddDimension(
+        transit_callback_index,
+        0,  # no slack
+        3000,  # vehicle maximum travel distance
+        True,  # start cumul to zero
+        dimension_name)
+    distance_dimension = routing.GetDimensionOrDie(dimension_name)
+    distance_dimension.SetGlobalSpanCostCoefficient(100)
+
+    # Setting first solution heuristic.
+    search_parameters = pywrapcp.DefaultRoutingSearchParameters()
+    search_parameters.first_solution_strategy = (
+        routing_enums_pb2.FirstSolutionStrategy.PATH_CHEAPEST_ARC) # FIRST SOLUTION STRATEGY WILL BE USED TO COMPARE ALGORITHMS
+
+    # Solve the problem.
+    solution = routing.SolveWithParameters(search_parameters)
+
+    # Print solution on console.
+    if solution:
+        print_solution(data, manager, routing, solution)
+
+if __name__ == '__main__':
+    main()

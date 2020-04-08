@@ -34,9 +34,8 @@ deliveries = {}
 load_weights = {}
 
 options = RouteOptions()
-service = RouteService('UaKqbaGJv9wQGxdOe95QTTSWa1ldsj9e')
+service = RouteService('cJrHDlXqG2L8mmWofS5FpftdRGDbDj00')
 
-# CHANGE TO NOT SPLIT UP INTO DRIVERS, ONLY KEEPING THIS NOW FOR EASE OF DEBUGGING
 for row in range(1, len(ws['A'])+1):
     if ('delivery' in str(ws['J'+str(row)].value)):
         if str(ws['A'+str(row)].value) in deliveries.keys():
@@ -135,7 +134,7 @@ def display_graph(G, edges):
     nx.draw_networkx_edge_labels(G, edge_labels=edges, pos=nx.spring_layout(G), font_size=8)
     plt.show()
 
-def create_data_model():
+def create_data_model(num_vehicles=1):
     """Stores the data for the problem."""
     data = {}
     distance_matrix = []
@@ -157,13 +156,13 @@ def create_data_model():
         distance_matrix.append(list(distance_matrix_list))
 
     data['distance_matrix'] = distance_matrix
-    data['num_vehicles'] = 4 # Not static, should be parsed from command line
+    data['num_vehicles'] = num_vehicles 
     data['depot'] = 0 # Should be static?
 
     return data
 
 """https://developers.google.com/optimization/routing/vrp"""
-def print_solution(data, manager, routing, solution):
+def print_solution_vrp(data, manager, routing, solution):
     """Prints solution on console."""
     max_route_distance = 0
     for vehicle_id in range(data['num_vehicles']):
@@ -182,22 +181,59 @@ def print_solution(data, manager, routing, solution):
         max_route_distance = max(route_distance, max_route_distance)
     print('Maximum of the route distances: {}m'.format(max_route_distance))
 
+"""https://developers.google.com/optimization/routing/tsp"""
+def print_solution_tsp(manager, routing, solution):
+    """Prints solution on console."""
+    print('Objective: {} miles'.format(solution.ObjectiveValue()))
+    index = routing.Start(0)
+    plan_output = 'Route for vehicle 0:\n'
+    route_distance = 0
+    while not routing.IsEnd(index):
+        plan_output += ' {} ->'.format(manager.IndexToNode(index))
+        previous_index = index
+        index = solution.Value(routing.NextVar(index))
+        route_distance += routing.GetArcCostForVehicle(previous_index, index, 0)
+    plan_output += ' {}\n'.format(manager.IndexToNode(index))
+    print(plan_output)
+    plan_output += 'Route distance: {}miles\n'.format(route_distance)
+
+"""https://developers.google.com/optimization/routing/tsp"""
+def tsp_processing(data=None):
+
+    # Create the routing index manager.
+    manager = pywrapcp.RoutingIndexManager(len(data['distance_matrix']),
+                                           data['num_vehicles'], data['depot'])
+
+    # Create Routing Model.
+    routing = pywrapcp.RoutingModel(manager)
+
+
+    def distance_callback(from_index, to_index):
+        """Returns the distance between the two nodes."""
+        # Convert from routing variable Index to distance matrix NodeIndex.
+        from_node = manager.IndexToNode(from_index)
+        to_node = manager.IndexToNode(to_index)
+        return data['distance_matrix'][from_node][to_node]
+
+    transit_callback_index = routing.RegisterTransitCallback(distance_callback)
+
+    # Define cost of each arc.
+    routing.SetArcCostEvaluatorOfAllVehicles(transit_callback_index)
+
+    # Setting first solution heuristic.
+    search_parameters = pywrapcp.DefaultRoutingSearchParameters()
+    search_parameters.first_solution_strategy = (
+        routing_enums_pb2.FirstSolutionStrategy.PATH_CHEAPEST_ARC) # FIRST SOLUTION STRATEGY WILL BE USED TO COMPARE ALGORITHMS
+
+    # Solve the problem.
+    solution = routing.SolveWithParameters(search_parameters)
+
+    # Print solution on console.
+    if solution:
+        print_solution_tsp(manager, routing, solution)
+
 """https://developers.google.com/optimization/routing/vrp"""
-def main():
-    """Separates out the location list of a single truck"""
-    #Enter number for truck to get locations for
-    one_truck_locations = deliveries[driver]
-    one_truck_load_weights = load_weights[float(driver)]
-
-    #graph_and_edges = create_driver_graph()
-    #routeGraph = graph_and_edges[0]
-    #edges = graph_and_edges[1]
-    #display_graph(routeGraph, edges)                                                   
-
-    """Solve the CVRP problem."""
-    # Instantiate the data problem.
-    data = create_data_model()
-    #print data
+def vrp_processing(data=None):                                                 
 
     # Create the routing index manager.
     manager = pywrapcp.RoutingIndexManager(len(data['distance_matrix']),
@@ -241,7 +277,22 @@ def main():
 
     # Print solution on console.
     if solution:
-        print_solution(data, manager, routing, solution)
+        print_solution_vrp(data, manager, routing, solution)
 
 if __name__ == '__main__':
-    main()
+
+    # Instantiate the data problem.
+    data = create_data_model(num_vehicles=1)
+
+    print("TRAVELLING SALESMAN PROBLEM:\n")
+    tsp_processing(data=data)
+
+    data['num_vehicles'] = 4
+    print("VEHICLE ROUTING PROBLEM:\n")
+    vrp_processing(data=data)
+
+    """Show complete delivery destination graph"""
+    #graph_and_edges = create_driver_graph()
+    #routeGraph = graph_and_edges[0]
+    #edges = graph_and_edges[1]
+    #display_graph(routeGraph, edges)  

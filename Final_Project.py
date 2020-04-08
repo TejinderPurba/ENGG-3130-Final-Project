@@ -40,10 +40,10 @@ service = RouteService('UaKqbaGJv9wQGxdOe95QTTSWa1ldsj9e')
 for row in range(1, len(ws['A'])+1):
     if ('delivery' in str(ws['J'+str(row)].value)):
         if str(ws['A'+str(row)].value) in deliveries.keys():
-            deliveries[str(ws['A'+str(row)].value)].append(str(ws['R'+str(row)].value))
+            deliveries[str(ws['A'+str(row)].value)].append(str(ws['R'+str(row)].value).replace('#',''))
             load_weights[float(ws['A'+str(row)].value)].append(float(ws['AK'+str(row)].value))
         else:
-            deliveries[str(ws['A'+str(row)].value)] = [str(ws['R'+str(row)].value)]
+            deliveries[str(ws['A'+str(row)].value)] = [str(ws['R'+str(row)].value).replace('#','')]
             load_weights[float(ws['A'+str(row)].value)] = [float(ws['AK'+str(row)].value)]
 
 def get_weighted_dist_matrix(locations, loads, factor_weight):
@@ -88,13 +88,19 @@ def calc_edges(locations, loads=None, factor=None, factor_weight=None):
     
     return routeMatrix
   
-def create_one_driver_graph():
+def create_driver_graph():
     G = nx.DiGraph()
     drive_times_all = {}
     drive_times = {}
-    nodes = deliveries[driver]
-    nodes.append(sleeman_location) # Add the origin destination
-  
+    
+    ####### Single Driver Parsing #######
+    #nodes = deliveries[driver] 
+
+    ####### All Driver Parsing #######
+    nodes = [y for x in deliveries.values() for y in x]
+
+    nodes.insert(0, sleeman_location) # Add the origin destination
+
     for n in range(0, len(nodes)): 
         cycled_nodes = (nodes[-n:] + nodes[:-n])
         routeMatrix = calc_edges(cycled_nodes)
@@ -118,7 +124,7 @@ def create_one_driver_graph():
     G.add_nodes_from(nodes)
     G.add_edges_from(drive_times)
 
-    return G, drive_times
+    return G, drive_times, nodes
 
 def display_graph(G, edges):
     nx.draw(G,
@@ -134,16 +140,15 @@ def create_data_model():
     data = {}
     distance_matrix = []
     distance_matrix_list = []
-    nodes = deliveries[driver]
-    nodes.insert(0, sleeman_location) # Add the origin destination
 
-    graphs_and_edges = create_one_driver_graph()
+    graphs_and_edges = create_driver_graph()
     drive_times = graphs_and_edges[1]
+    delivery_nodes = graphs_and_edges[2]
 
-    for n in range(len(nodes)-1):
+    for n in range(len(delivery_nodes)-1):
         del distance_matrix_list[:]
-        for i in range(len(nodes)-1):
-            search_tuple = (nodes[n], nodes[i])
+        for i in range(len(delivery_nodes)-1):
+            search_tuple = (delivery_nodes[n], delivery_nodes[i])
             if search_tuple in drive_times:
                 distance_matrix_list.append(int(drive_times[search_tuple]))
             else:
@@ -152,7 +157,7 @@ def create_data_model():
         distance_matrix.append(list(distance_matrix_list))
 
     data['distance_matrix'] = distance_matrix
-    data['num_vehicles'] = 1 # Not static, should be parsed from command line
+    data['num_vehicles'] = 4 # Not static, should be parsed from command line
     data['depot'] = 0 # Should be static?
 
     return data
@@ -184,10 +189,10 @@ def main():
     one_truck_locations = deliveries[driver]
     one_truck_load_weights = load_weights[float(driver)]
 
-    graph_and_edges = create_one_driver_graph()
-    routeGraph = graph_and_edges[0]
-    edges = graph_and_edges[1]
-    display_graph(routeGraph, edges)                                                   
+    #graph_and_edges = create_driver_graph()
+    #routeGraph = graph_and_edges[0]
+    #edges = graph_and_edges[1]
+    #display_graph(routeGraph, edges)                                                   
 
     """Solve the CVRP problem."""
     # Instantiate the data problem.

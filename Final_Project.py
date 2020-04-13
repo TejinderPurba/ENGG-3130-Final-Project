@@ -7,6 +7,7 @@ import networkx as nx
 import numpy as np
 import json
 import string
+import pickle
 import matplotlib.pyplot as plt
 from itertools import combinations 
 
@@ -35,15 +36,6 @@ load_weights = {}
 
 options = RouteOptions()
 service = RouteService('cJrHDlXqG2L8mmWofS5FpftdRGDbDj00')
-
-for row in range(1, len(ws['A'])+1):
-    if ('delivery' in str(ws['J'+str(row)].value)):
-        if str(ws['A'+str(row)].value) in deliveries.keys():
-            deliveries[str(ws['A'+str(row)].value)].append(str(ws['R'+str(row)].value).replace('#',''))
-            load_weights[float(ws['A'+str(row)].value)].append(float(ws['AK'+str(row)].value))
-        else:
-            deliveries[str(ws['A'+str(row)].value)] = [str(ws['R'+str(row)].value).replace('#','')]
-            load_weights[float(ws['A'+str(row)].value)] = [float(ws['AK'+str(row)].value)]
 
 def get_weighted_dist_matrix(locations, loads, factor_weight):
 
@@ -88,6 +80,23 @@ def calc_edges(locations, loads=None, factor=None, factor_weight=None):
     return routeMatrix
   
 def create_driver_graph():
+
+    # Parse the excel sheet data
+    for row in range(1, len(ws['A'])+1):
+        if ('delivery' in str(ws['J'+str(row)].value)):
+            if str(ws['A'+str(row)].value) in deliveries.keys():
+                deliveries[str(ws['A'+str(row)].value)].append(str(ws['R'+str(row)].value).replace('#',''))
+                if (ws['AK'+str(row)].value is not None):
+                    load_weights[float(ws['A'+str(row)].value)].append(float(ws['AK'+str(row)].value))
+                else:
+                    load_weights[float(ws['A'+str(row)].value)].append(float(0.0))
+            else:
+                deliveries[str(ws['A'+str(row)].value)] = [str(ws['R'+str(row)].value).replace('#','')]
+                if (ws['AK'+str(row)].value is not None):
+                    load_weights[float(ws['A'+str(row)].value)] = [float(ws['AK'+str(row)].value)]
+                else:
+                    load_weights[float(ws['A'+str(row)].value)] = [float(0.0)]
+
     G = nx.DiGraph()
     drive_times_all = {}
     drive_times = {}
@@ -159,6 +168,11 @@ def create_data_model(num_vehicles=1):
     data['num_vehicles'] = num_vehicles 
     data['depot'] = 0 # Should be static?
 
+    # Save dictionary to text file so dont have to use MapQuest API every time
+    file_name = 'DistanceMatrix-%s-%s.pickle' % (str(data_file[-9:-5]), str(num_vehicles))
+    with open(file_name, 'wb') as handle:
+        pickle.dump(data, handle, protocol=pickle.HIGHEST_PROTOCOL)
+
     return data
 
 """https://developers.google.com/optimization/routing/vrp"""
@@ -222,8 +236,10 @@ def tsp_processing(data=None):
 
     # Setting first solution heuristic.
     search_parameters = pywrapcp.DefaultRoutingSearchParameters()
-    search_parameters.first_solution_strategy = (
-        routing_enums_pb2.FirstSolutionStrategy.PATH_CHEAPEST_ARC) # FIRST SOLUTION STRATEGY WILL BE USED TO COMPARE ALGORITHMS
+    #search_parameters.local_search_metaheuristic = (routing_enums_pb2.LocalSearchMetaheuristic.GREEDY_DESCENT)
+    search_parameters.time_limit.seconds = 30
+    #search_parameters.log_search = True
+    search_parameters.first_solution_strategy = (routing_enums_pb2.FirstSolutionStrategy.PATH_CHEAPEST_ARC) # FIRST SOLUTION STRATEGY WILL BE USED TO COMPARE ALGORITHMS
 
     # Solve the problem.
     solution = routing.SolveWithParameters(search_parameters)
@@ -268,9 +284,12 @@ def vrp_processing(data=None):
     distance_dimension.SetGlobalSpanCostCoefficient(100)
 
     # Setting first solution heuristic.
+
     search_parameters = pywrapcp.DefaultRoutingSearchParameters()
-    search_parameters.first_solution_strategy = (
-        routing_enums_pb2.FirstSolutionStrategy.PATH_CHEAPEST_ARC) # FIRST SOLUTION STRATEGY WILL BE USED TO COMPARE ALGORITHMS
+    #search_parameters.local_search_metaheuristic = (routing_enums_pb2.LocalSearchMetaheuristic.GREEDY_DESCENT)
+    search_parameters.time_limit.seconds = 30
+    #search_parameters.log_search = True
+    search_parameters.first_solution_strategy = (routing_enums_pb2.FirstSolutionStrategy.PATH_CHEAPEST_ARC) # FIRST SOLUTION STRATEGY WILL BE USED TO COMPARE ALGORITHMS
 
     # Solve the problem.
     solution = routing.SolveWithParameters(search_parameters)
@@ -279,14 +298,31 @@ def vrp_processing(data=None):
     if solution:
         print_solution_vrp(data, manager, routing, solution)
 
+def loadRouteMatrix(fileName=None):
+    with open(fileName, 'rb') as handle:
+        data = pickle.load(handle)
+
+    return data
+
 if __name__ == '__main__':
 
-    # Instantiate the data problem.
-    data = create_data_model(num_vehicles=1)
 
+    # Instantiate the data problem using the MapQuest library
+    #data = create_data_model(num_vehicles=1)
+
+    # Instantiate the data problem using the Data File
+    #data = loadRouteMatrix(fileName='DistanceMatrix-1_02-1.pickle')
+    #data = loadRouteMatrix(fileName='DistanceMatrix-1_03-1.pickle')
+    #data = loadRouteMatrix(fileName='DistanceMatrix-1_04-1.pickle')
+    data = loadRouteMatrix(fileName='DistanceMatrix-1_05-1.pickle')
+    #data = loadRouteMatrix(fileName='DistanceMatrix-1_07-1.pickle')
+
+    # Perform TSP with 1 vehicle
+    data['num_vehicles'] = 1
     print("TRAVELLING SALESMAN PROBLEM:\n")
     tsp_processing(data=data)
 
+    # Perform VRP with 4 vehicles
     data['num_vehicles'] = 4
     print("VEHICLE ROUTING PROBLEM:\n")
     vrp_processing(data=data)

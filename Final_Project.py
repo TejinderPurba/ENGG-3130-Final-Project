@@ -75,7 +75,7 @@ def calc_edges(locations, loads=None, factor=None, factor_weight=None):
     
     return routeMatrix
   
-def create_driver_graph():
+def create_graph_from_mapquest():
 
     wb = load_workbook(data_file, read_only=False, keep_vba=True)
     ws = wb.active
@@ -150,7 +150,7 @@ def create_data_model(num_vehicles=1):
     distance_matrix = []
     distance_matrix_list = []
 
-    graphs_and_edges = create_driver_graph()
+    graphs_and_edges = create_graph_from_mapquest()
     drive_times = graphs_and_edges[1]
     delivery_nodes = graphs_and_edges[2]
 
@@ -417,7 +417,7 @@ if __name__ == '__main__':
     vrp_limited_processing(data=data)
 
     """Show complete delivery destination graph"""
-    #graph_and_edges = create_driver_graph()
+    #graph_and_edges = create_graph_from_mapquest()
     #routeGraph = graph_and_edges[0]
     #edges = graph_and_edges[1]
     #display_graph(routeGraph, edges)  

@@ -31,7 +31,7 @@ driver = '1642'
 sleeman_location = "551 Clair Rd W, Guelph, ON N1L 1E9"
 
 options = RouteOptions()
-service = RouteService('cJrHDlXqG2L8mmWofS5FpftdRGDbDj00')
+service = RouteService('LcBh6g357kImNIm0k2aU5bkFG9MBxeHr')
 
 def get_weighted_dist_matrix(locations, loads, factor_weight):
 
@@ -65,7 +65,18 @@ def calc_edges(locations, loads=None, factor=None, factor_weight=None):
 
     if factor is None:
         routeMatrixRaw = service.routeMatrix(locations=locations, oneToMany=True)
-        routeMatrix = routeMatrixRaw['distance']
+        distMatrix = routeMatrixRaw['distance']
+        timeMatrix = routeMatrixRaw['time']
+
+        milesPerGallon = 120.0 # Should be around 12.0, but inflated by 10 for analysis purposes
+        costPerGallon =  43.5 # Should be around 4.35 CAD per US gallon, but inflated by 10 for analysis purposes
+        gasCostMatrixTemp = [i/milesPerGallon for i in distMatrix]
+        gasCostMatrix = [i*costPerGallon for i in gasCostMatrixTemp]
+        
+        driverWage = 0.069444444 # Should be around 0.00694, but inflated by 10 for analysis purposes
+        timeCostMatrix = [i*driverWage for i in timeMatrix]
+
+        routeMatrix = [i + j for i, j in zip(gasCostMatrix, timeCostMatrix)]
   
     elif factor is 'dist':
         routeMatrix = get_weighted_dist_matrix(locations=locations, loads=loads, factor_weight=factor_weight)
@@ -169,8 +180,8 @@ def create_data_model(num_vehicles=1):
     data['num_vehicles'] = num_vehicles 
     data['depot'] = 0 # Should be static?
 
-    # Save dictionary to text file so dont have to use MapQuest API every time
-    file_name = 'DistanceMatrix-%s-%s.pickle' % (str(data_file[-9:-5]), str(num_vehicles))
+    # Save dictionary to pickle file so dont have to use MapQuest API every time
+    file_name = 'CostMatrix-%s-%s.pickle' % (str(data_file[-9:-5]), str(num_vehicles))
     with open(file_name, 'wb') as handle:
         pickle.dump(data, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
@@ -179,7 +190,7 @@ def create_data_model(num_vehicles=1):
 """https://developers.google.com/optimization/routing/tsp"""
 def print_solution_tsp(manager, routing, solution):
     """Prints solution on console."""
-    print('Objective: {} miles'.format(solution.ObjectiveValue()))
+    print('Objective: {} cost units'.format(solution.ObjectiveValue()))
     index = routing.Start(0)
     plan_output = 'Route for vehicle 0:\n'
     route_distance = 0
@@ -190,7 +201,7 @@ def print_solution_tsp(manager, routing, solution):
         route_distance += routing.GetArcCostForVehicle(previous_index, index, 0)
     plan_output += ' {}\n'.format(manager.IndexToNode(index))
     print(plan_output)
-    plan_output += 'Route distance: {}miles\n'.format(route_distance)
+    plan_output += 'Route cost: {} units\n'.format(route_distance)
 
 """https://developers.google.com/optimization/routing/vrp"""
 def print_solution_vrp(data, manager, routing, solution):
@@ -207,10 +218,10 @@ def print_solution_vrp(data, manager, routing, solution):
             route_distance += routing.GetArcCostForVehicle(
                 previous_index, index, vehicle_id)
         plan_output += '{}\n'.format(manager.IndexToNode(index))
-        plan_output += 'Distance of the route: {}m\n'.format(route_distance)
+        plan_output += 'Cost of the route: {} units\n'.format(route_distance)
         print(plan_output)
         max_route_distance = max(route_distance, max_route_distance)
-    print('Maximum of the route distances: {}m'.format(max_route_distance))
+    print('Maximum of the route costs: {} units'.format(max_route_distance))
 
 def print_solution_vrp_limited(data, manager, routing, solution):
     """Prints solution on console."""
@@ -232,12 +243,12 @@ def print_solution_vrp_limited(data, manager, routing, solution):
                 previous_index, index, vehicle_id)
         plan_output += ' {0} Load({1})\n'.format(manager.IndexToNode(index),
                                                  route_load)
-        plan_output += 'Distance of the route: {}m\n'.format(route_distance)
+        plan_output += 'Cost of the route: {} units\n'.format(route_distance)
         plan_output += 'Load of the route: {}\n'.format(route_load)
         print(plan_output)
         total_distance += route_distance
         total_load += route_load
-    print('Total distance of all routes: {}m'.format(total_distance))
+    print('Total cost of all routes: {} units'.format(total_distance))
     print('Total load of all routes: {}'.format(total_load))
 
 """https://developers.google.com/optimization/routing/tsp"""
@@ -306,7 +317,7 @@ def vrp_processing(data=None):
     routing.AddDimension(
         transit_callback_index,
         0,  # no slack
-        3000,  # vehicle maximum travel distance
+        5000,  # vehicle maximum travel distance
         True,  # start cumul to zero
         dimension_name)
     distance_dimension = routing.GetDimensionOrDie(dimension_name)
@@ -391,29 +402,33 @@ if __name__ == '__main__':
 
     # Instantiate the data problem using the MapQuest library
     #data = create_data_model(num_vehicles=1)
-
+    
     # Instantiate the data problem using the Pickle files
-    data = loadPickle(fileName='DistanceMatrix-1_02-1.pickle')
-    #data = loadPickle(fileName='DistanceMatrix-1_03-1.pickle')
-    #data = loadPickle(fileName='DistanceMatrix-1_04-1.pickle')
-    #data = loadPickle(fileName='DistanceMatrix-1_05-1.pickle')
-    #data = loadPickle(fileName='DistanceMatrix-1_07-1.pickle')
+    data = loadPickle(fileName='CostMatrix-1_02-1.pickle')
+    #data = loadPickle(fileName='CostMatrix-1_03-1.pickle')
+    #data = loadPickle(fileName='CostMatrix-1_07-1.pickle')
+    #data = loadPickle(fileName='CostMatrix-2_18-1.pickle')
 
+    print("\n----------------- TRAVELLING SALESMAN PROBLEM -----------------\n")
     # Perform TSP with 1 vehicle & no capacity limits
     data['num_vehicles'] = 1
-    print("\n----------------- TRAVELLING SALESMAN PROBLEM -----------------\n")
     tsp_processing(data=data)
 
-    # Perform VRP with 4 vehicles & no capacity limits
-    data['num_vehicles'] = 4
     print("\n----------------- VEHICLE ROUTING PROBLEM -----------------\n")
+    # Perform VRP with 4 vehicles & no capacity limits
+    data['num_vehicles'] = 5
     vrp_processing(data=data)
 
-    # Perform VRP with 4 vehicles w/ limited capacity (Can change to 1 vehicle to do TSP w/ capacity)
-    data['num_vehicles'] = 4
-    data['demands'] = loadPickle(fileName='LoadMatrix-1_02-1.pickle') # Load weights for the deliveries
-    data['vehicle_capacities'] = [3000, 3000, 3000, 3000]
     print("\n----------------- LIMITED CAPACITY VEHICLE ROUTING PROBLEM ----------------- \n")
+    # Perform VRP with 4 vehicles w/ limited capacity (Can change to 1 vehicle to do TSP w/ capacity)
+    data['num_vehicles'] = 5
+    
+    data['demands'] = loadPickle(fileName='LoadMatrix-1_02-1.pickle') # Load weights for the deliveries
+    #data['demands'] = loadPickle(fileName='LoadMatrix-1_03-1.pickle') # Load weights for the deliveries
+    #data['demands'] = loadPickle(fileName='LoadMatrix-1_07-1.pickle') # Load weights for the deliveries
+    #data['demands'] = loadPickle(fileName='LoadMatrix-2_18-1.pickle') # Load weights for the deliveries
+    
+    data['vehicle_capacities'] = [3000, 3000, 3000, 3000, 3000]
     vrp_limited_processing(data=data)
 
     """Show complete delivery destination graph"""
@@ -430,13 +445,8 @@ if __name__ == '__main__':
 
     # ------------ PATH_CHEAPEST_ARC ALGORITHM w/ GREEDY DESCENT LOCAL SEARCH ------------
     # 1.) TSP(Unlimited Capacity) VS. VRP(Unlimited Capacity) [All Pickles]
-
-
     # 2.) TSP(Unlimited Capacity) VS. VRP(Limited Capacity) [All Pickles]
-
-
     # 3.) TSP(Limited Capacity) VS. VRP (Limited Capacity) [All Pickles]
-
 
 
     # ------------ SAVINGS ALGORITHM w/ GREEDY DESCENT LOCAL SEARCH ------------

@@ -389,12 +389,80 @@ def vrp_limited_processing(data=None):
     # Print solution on console.
     if solution:
         print_solution_vrp_limited(data, manager, routing, solution)
+        graph_limited_vrp(data, manager, routing, solution)
 
 def loadPickle(fileName=None):
     with open(fileName, 'rb') as handle:
         data = pickle.load(handle)
 
     return data
+
+
+def graph_limited_vrp(data, manager, routing, solution):
+    """This function creates and displays a graph for the limited VRP model.
+    This could also be used for the other models."""
+
+    # iterate through vehicles. Unique graph is created for every vehicle with >0 drops
+    for vehicle_id in range(data['num_vehicles']):
+        index = routing.Start(vehicle_id)
+        G = nx.DiGraph() # initialize a graph for vehicle (vehicle_id)
+        edges = {}
+        node_index = 0
+
+        while not routing.IsEnd(index):
+
+            previous_index = node_index
+            index = solution.Value(routing.NextVar(index))
+            node_index = manager.IndexToNode(index) # get index of next node in path
+
+            if previous_index is node_index:  # skips routes with ZERO deliveries
+                break
+
+            if node_index >= len(data['distance_matrix']):
+                node_index = 0
+
+            # This dictionary is later used to label the edges
+            edges[(previous_index, node_index)] = routing.GetArcCostForVehicle(previous_index, index, vehicle_id)
+
+            # Edges are added one by one, with length proportional to cost IF spring layout is chosen
+            G.add_edge(previous_index, node_index, #length=routing.GetArcCostForVehicle(previous_index, index, vehicle_id),
+                       color=colour_finder(vehicle_id))
+            G.add_node(node_index)
+
+        # IF it is not an empty route, one last edge is added to connect the final delivery back to home base
+        if previous_index is not node_index:
+            G.add_edge(node_index, 0, #length=routing.GetArcCostForVehicle(node_index, 0, vehicle_id),
+                       color=colour_finder(vehicle_id))
+            edges[(node_index, 0)] = routing.GetArcCostForVehicle(node_index, 0, vehicle_id)
+
+        my_layout = nx.spring_layout(G)  # Set layout for edge labels and graph
+
+        # this route graph is drawn...
+        nx.draw(G,
+                node_color=colour_finder(vehicle_id),
+                pos=my_layout,
+                node_size=200,
+                with_labels=True,
+                font_size=10)
+        # with edge labels added, which are the "cost" parameter for that segment of the route
+        nx.draw_networkx_edge_labels(G, edge_labels=edges, pos=my_layout, font_size=8)
+    plt.show()  # show the full plot
+
+
+def colour_finder(vehicle):
+    """This function is used to get the graph color, where vehicle is the
+    vehicle index for the given data set. Returns a color in string form."""
+
+    switcher = {
+        0: "blue",
+        1: "red",
+        2: "green",
+        3: "yellow",
+        4: "purple",
+        5: "brown"
+    }
+    return switcher.get(vehicle, "Invalid month")
+
 
 if __name__ == '__main__':
 

@@ -469,7 +469,10 @@ def graph_limited_vrp(data, manager, routing, solution):
         # this route graph is drawn
         if len(G) is not 0:
             current_plot += 1
-            fig.add_subplot(1,plot_num,current_plot) # add subplot to a 1x3 matrix
+            if plot_num > 3:
+                fig.add_subplot(2,3,current_plot) # add subplot to a 2x3 matrix
+            else:
+                fig.add_subplot(1,plot_num,current_plot) # add subplot to a 1xn matrix
             nx.draw(G,
                     node_color=colour_finder(vehicle_id),
                     pos=my_layout,

@@ -1,6 +1,13 @@
 # ENGG*3130 - Modeling Complex Systems
 ## Final Project
 
+# JupyterHub Initialization
+#%%capture cap_out --no-stderr\n",
+#import sys
+#!{sys.executable} -m pip install ortools
+#import warnings
+#warnings.simplefilter('ignore')
+
 from __future__ import print_function
 import io
 import networkx as nx
@@ -26,7 +33,7 @@ from ortools.constraint_solver import pywrapcp
 
 #%matplotlib inline
 
-data_file = "./data/1_02.xlsm" #Enter the data file for the day to schedule
+data_file = "1_02.xlsm" #Enter the data file for the day to schedule
 driver = '1642'
 sleeman_location = "551 Clair Rd W, Guelph, ON N1L 1E9"
 
@@ -190,7 +197,6 @@ def create_data_model(num_vehicles=1):
 """https://developers.google.com/optimization/routing/tsp"""
 def print_solution_tsp(manager, routing, solution):
     """Prints solution on console."""
-    print('Objective: {} cost units'.format(solution.ObjectiveValue()))
     index = routing.Start(0)
     plan_output = 'Route for vehicle 0:\n'
     route_distance = 0
@@ -200,13 +206,14 @@ def print_solution_tsp(manager, routing, solution):
         index = solution.Value(routing.NextVar(index))
         route_distance += routing.GetArcCostForVehicle(previous_index, index, 0)
     plan_output += ' {}\n'.format(manager.IndexToNode(index))
+    plan_output += '\nRoute cost: {} units\n'.format(route_distance)
     print(plan_output)
-    plan_output += 'Route cost: {} units\n'.format(route_distance)
 
 """https://developers.google.com/optimization/routing/vrp"""
 def print_solution_vrp(data, manager, routing, solution):
     """Prints solution on console."""
     max_route_distance = 0
+    total_distance = 0
     for vehicle_id in range(data['num_vehicles']):
         index = routing.Start(vehicle_id)
         plan_output = 'Route for vehicle {}:\n'.format(vehicle_id)
@@ -220,8 +227,9 @@ def print_solution_vrp(data, manager, routing, solution):
         plan_output += '{}\n'.format(manager.IndexToNode(index))
         plan_output += 'Cost of the route: {} units\n'.format(route_distance)
         print(plan_output)
+        total_distance += route_distance
         max_route_distance = max(route_distance, max_route_distance)
-    print('Maximum of the route costs: {} units'.format(max_route_distance))
+    print('Total cost of all routes: {} units'.format(total_distance))
 
 def print_solution_vrp_limited(data, manager, routing, solution):
     """Prints solution on console."""
@@ -401,6 +409,27 @@ def loadPickle(fileName=None):
 def graph_limited_vrp(data, manager, routing, solution):
     """This function creates and displays a graph for the limited VRP model.
     This could also be used for the other models."""
+    
+    current_plot = 0
+    plot_num = 0
+    fig = plt.figure(figsize=(20, 8)) # create a figure to display
+    empty_routes = 0
+
+    # Get number of vehicles with no routes
+    for vehicle_id in range(data['num_vehicles']):
+        index = routing.Start(vehicle_id)
+        node_index = 0
+        while not routing.IsEnd(index):
+
+            previous_index = node_index
+            index = solution.Value(routing.NextVar(index))
+            node_index = manager.IndexToNode(index) # get index of next node in path
+
+            if previous_index is node_index:  # skips routes with ZERO deliveries
+                empty_routes += 1
+                break
+    
+    plot_num = data['num_vehicles'] - empty_routes # number of columns to plot
 
     # iterate through vehicles. Unique graph is created for every vehicle with >0 drops
     for vehicle_id in range(data['num_vehicles']):
@@ -437,16 +466,20 @@ def graph_limited_vrp(data, manager, routing, solution):
 
         my_layout = nx.spring_layout(G)  # Set layout for edge labels and graph
 
-        # this route graph is drawn...
-        nx.draw(G,
-                node_color=colour_finder(vehicle_id),
-                pos=my_layout,
-                node_size=200,
-                with_labels=True,
-                font_size=10)
-        # with edge labels added, which are the "cost" parameter for that segment of the route
-        nx.draw_networkx_edge_labels(G, edge_labels=edges, pos=my_layout, font_size=8)
-    plt.show()  # show the full plot
+        # this route graph is drawn
+        if len(G) is not 0:
+            current_plot += 1
+            fig.add_subplot(1,plot_num,current_plot) # add subplot to a 1x3 matrix
+            nx.draw(G,
+                    node_color=colour_finder(vehicle_id),
+                    pos=my_layout,
+                    node_size=200,
+                    with_labels=True,
+                    font_size=10)
+            # with edge labels added, which are the "cost" parameter for that segment of the route
+            nx.draw_networkx_edge_labels(G, edge_labels=edges, pos=my_layout, font_size=8)
+            #plt.show()
+        G.clear()
 
 
 def colour_finder(vehicle):
